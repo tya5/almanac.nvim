@@ -41,9 +41,10 @@ local cal = Almanac({
 
 cal:show()
 cal:next()        cal:prev()          -- 現在のビュー単位でページ送り(month→月送り, week→週送り, day→日送り。既定キー<C-f>/<C-b>。3.4節)
-cal:next_day()    cal:prev_day()      -- カーソル移動(日単位)。ビューに関わらず同じ意味
-cal:next_week()   cal:prev_week()    -- カーソル移動(週単位)
+cal:next_day()    cal:prev_day()      -- フォーカス移動(日単位)。ビューに関わらず同じ意味
+cal:next_week()   cal:prev_week()    -- フォーカス移動(週単位)
 cal:next_month()  cal:prev_month()   -- 直接月送り(ビューに関わらず月送り。next()の内部実装、独立にも呼べる)
+cal:focus_down()  cal:focus_up()      -- フォーカス移動(down/up)。monthビューでは週単位、week/dayビューでは日単位(3.4節)
 cal:goto_date(os.time({year=2026, month=8, day=1}))
 cal:today()
 cal:refresh()             -- 現在の表示範囲(view依存)についてeventsを再取得
@@ -51,7 +52,7 @@ cal:close()
 cal:toggle()
 cal:set_view("week")       -- "month"|"week"|"day" へ切り替え(3.8節)
 cal:cycle_view()           -- month → week → day → month … と巡回切り替え(既定キー: 3.4節)
-cal:selected_day()        -- カーソルがある日付(epoch integer)を返す
+cal:selected_day()        -- フォーカスしている日付(epoch integer)を返す
 cal:selected_events()      -- その日のEvent[]を返す
 cal:on(event, cb)          -- 3.5節
 cal:map(lhs, action, opts) -- 3.4節のkeysと同じ形式を後から追加登録
@@ -113,8 +114,16 @@ cal:cycle_position()       -- left → right → top → bottom → left … と
 
 ```lua
 keys = {
-  -- カーソル移動(ビューが変わっても意味は同じ: 日/週単位で focused day を動かす)
-  h = "prev_day", l = "next_day", j = "next_week", k = "prev_week",
+  -- フォーカス移動。実際のVimカーソルもフォーカス先のセル/行へ追従する
+  -- (render()のたびに_sync_cursor_to_date()で同期。「テキストが勝手に
+  -- 変わる」のではなく「カーソルが動く」ように見えることを意図した設計)。
+  -- h/l(左右)は常に日単位。j/k(上下)は**現在のビューが実際に画面上で
+  -- 何を1行/1段としているか**に合わせる: monthビューは1行=1週なので
+  -- 週単位(next_week/prev_week)、week/dayビューは1行=1日なので日単位
+  -- (next_day/prev_day)。j/kが常に週単位固定だと、week/dayビューでは
+  -- 1行下に動いたつもりが7日先に飛んでしまい、Vimのj/k(1行下/上)という
+  -- 感覚と合わなかった(ユーザーからのフィードバックで判明・修正)。
+  h = "prev_day", l = "next_day", j = "focus_down", k = "focus_up",
   -- ページ送り(現在のビュー単位。monthなら月送り、weekなら週送り、dayなら日送り)。
   -- next_month/next_week/next_day のように粒度ごとに別キーを用意せず、
   -- 「ビューが変われば送る単位も変わる」1組のキーに統一する設計(ユーザーからのフィードバックで
@@ -129,7 +138,9 @@ keys = {
 }
 ```
 
-既定のアクション名は`next_day`/`prev_day`/`next_week`/`prev_week`/`next_month`/`prev_month`/`next`/`prev`/`today`/`view_month`/`view_week`/`view_day`/`cycle_view`/`select`/`close`/`toggle`/`cycle_position`。`next`/`prev`は`next_month`等と違い**現在の`self.view`を見て月/週/日送りのどれかを呼び分ける**薄いディスパッチ(3.1節)。`next_month`等は`next`の内部実装だが、独立したアクション名としても(カスタムキーマップから)呼べる。`actions`テーブルで独自アクションを追加登録可能(snacksの`actions`踏襲)。
+既定のアクション名は`next_day`/`prev_day`/`next_week`/`prev_week`/`next_month`/`prev_month`/`next`/`prev`/`focus_down`/`focus_up`/`today`/`view_month`/`view_week`/`view_day`/`cycle_view`/`select`/`close`/`toggle`/`cycle_position`。`next`/`prev`と`focus_down`/`focus_up`はいずれも`next_month`等と違い**現在の`self.view`を見て粒度を呼び分ける**薄いディスパッチ(3.1節)。`next_month`等は内部実装だが、独立したアクション名としても(カスタムキーマップから)呼べる。`actions`テーブルで独自アクションを追加登録可能(snacksの`actions`踏襲)。
+
+**用語**: `self.date`(=「フォーカスしている日」)がこのプラグインの状態の中心概念で、`next_day`/`focus_down`等はすべて**フォーカスを移動する**操作。Vimの実カーソル(点滅する位置)は`_sync_cursor_to_date()`によってフォーカスに追従させているだけの表示上の同期先であり、「カーソル移動」と呼ぶとこの2つが混同されるため、以後「フォーカス移動」と呼ぶ。
 
 ### 3.5 イベント/フック
 

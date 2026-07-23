@@ -30,12 +30,19 @@ M.defaults = {
   bo = {},
   ---@type table<string, false|string|fun(self:almanac.Calendar)|{[1]:string, desc:string}>
   keys = {
-    -- Cursor movement within the current view (moves the focused day
-    -- by a day/week at a time, regardless of which view is showing).
+    -- Cursor movement within the current view, matching standard Vim
+    -- h/j/k/l directions against what's actually on screen:
+    --  h/l (left/right): always a day at a time — in month view that's
+    --  literally the cell to the left/right in the grid.
+    --  j/k (down/up): whatever one row of the *current view* is — a
+    --  week in month view (moving down a grid row = +7 days), but a
+    --  single day in week/day view (each row there IS one day; using
+    --  next_week/prev_week for j/k there would jump 7 days on one
+    --  keypress instead of moving one line down the list).
     h = "prev_day",
     l = "next_day",
-    j = "next_week",
-    k = "prev_week",
+    j = "focus_down",
+    k = "focus_up",
     -- Page forward/backward by the *current view's* own unit — a
     -- month at a time in month view, a week at a time in week view, a
     -- day at a time in day view (Calendar:next()/:prev()). One pair of

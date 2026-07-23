@@ -95,6 +95,50 @@ describe("almanac.Calendar", function()
     assert.same({ 2026, 8, 15 }, { dateutil.ymd(cal:selected_day()) })
   end)
 
+  it("focus_down()/focus_up() (j/k) step by a week in month view but a day in week/day view", function()
+    cal = Almanac({ date = ymd(2026, 8, 15), view = "month" })
+    cal:show()
+
+    cal:focus_down() -- month view: down a grid row = +7 days
+    assert.same({ 2026, 8, 22 }, { dateutil.ymd(cal:selected_day()) })
+    cal:focus_up()
+    assert.same({ 2026, 8, 15 }, { dateutil.ymd(cal:selected_day()) })
+
+    cal:set_view("week")
+    cal:focus_down() -- week view: down one line = +1 day, not +7
+    assert.same({ 2026, 8, 16 }, { dateutil.ymd(cal:selected_day()) })
+    cal:focus_up()
+    assert.same({ 2026, 8, 15 }, { dateutil.ymd(cal:selected_day()) })
+
+    cal:set_view("day")
+    cal:focus_down()
+    assert.same({ 2026, 8, 16 }, { dateutil.ymd(cal:selected_day()) })
+  end)
+
+  it("moves the real cursor onto the focused day after every render (not just the highlight)", function()
+    cal = Almanac({ date = ymd(2026, 8, 15), view = "month" })
+    cal:show()
+
+    cal:next_day()
+    local row, col = unpack(vim.api.nvim_win_get_cursor(cal.win))
+    local entry = cal._line_map[row]
+    assert.equals("day_segments", entry.type)
+    local found
+    for _, seg in ipairs(entry.segments) do
+      if col >= seg.col_start and col < seg.col_end then
+        found = seg.epoch
+      end
+    end
+    assert.is_not_nil(found)
+    assert.same({ dateutil.ymd(cal:selected_day()) }, { dateutil.ymd(found) })
+
+    cal:set_view("week")
+    row = vim.api.nvim_win_get_cursor(cal.win)[1]
+    entry = cal._line_map[row]
+    assert.equals("day", entry.type)
+    assert.same({ dateutil.ymd(cal:selected_day()) }, { dateutil.ymd(entry.epoch) })
+  end)
+
   it("range_changed fires when the visible range actually changes", function()
     cal = Almanac({ date = ymd(2026, 8, 15) })
     cal:show()

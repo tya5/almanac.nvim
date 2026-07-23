@@ -107,7 +107,33 @@ function Calendar:render()
     self._line_map = line_map or {}
     winmod.set_lines(self.buf, lines)
     winmod.set_highlights(self.buf, hl, ns)
+    self:_sync_cursor_to_date()
   end)
+end
+
+--- Move the real Vim cursor onto self.date's cell/line in the
+--- just-rendered buffer. Without this, hjkl-driven navigation only
+--- moved which cell was *highlighted* while the actual text cursor sat
+--- wherever it happened to be — the buffer visibly changed under a
+--- stationary cursor instead of the cursor moving through the view,
+--- which is what h/j/k/l are supposed to feel like.
+function Calendar:_sync_cursor_to_date()
+  if not (self.win and vim.api.nvim_win_is_valid(self.win)) then
+    return
+  end
+  for line, entry in pairs(self._line_map) do
+    if entry.type == "day_segments" then
+      for _, seg in ipairs(entry.segments) do
+        if dateutil.is_same_day(seg.epoch, self.date) then
+          pcall(vim.api.nvim_win_set_cursor, self.win, { line, seg.col_start })
+          return
+        end
+      end
+    elseif entry.type == "day" and dateutil.is_same_day(entry.epoch, self.date) then
+      pcall(vim.api.nvim_win_set_cursor, self.win, { line, 0 })
+      return
+    end
+  end
 end
 
 function Calendar:_ensure_win()
@@ -234,6 +260,28 @@ function Calendar:prev()
   return self:prev_month()
 end
 
+--- j/k ("down"/"up"): moves the focused day by whatever one row of the
+--- *current view* actually represents. In month view a row is a week,
+--- so down/up means next_week/prev_week (matches moving down/up a row
+--- in the grid). In week and day view, each row is a single day (week
+--- view lists one day per line; day view has no row-of-days at all),
+--- so down/up there means next_day/prev_day — using next_week there
+--- would jump seven days on a single j press, which doesn't match
+--- moving down one line in a vertical day-per-line list.
+function Calendar:focus_down()
+  if self.view == "month" then
+    return self:next_week()
+  end
+  return self:next_day()
+end
+
+function Calendar:focus_up()
+  if self.view == "month" then
+    return self:prev_week()
+  end
+  return self:prev_day()
+end
+
 -- View switching (3.8) ---------------------------------------------------
 
 --- @param view "month"|"week"|"day"
@@ -342,6 +390,12 @@ function Calendar:_action_fns()
     end,
     next = function()
       self:next()
+    end,
+    focus_down = function()
+      self:focus_down()
+    end,
+    focus_up = function()
+      self:focus_up()
     end,
     today = function()
       self:today()

@@ -126,9 +126,10 @@ See [docs/DESIGN.md](docs/DESIGN.md) section 3 for the full spec. Summary:
 ```lua
 cal:show() / cal:close() / cal:toggle()
 cal:next() cal:prev()               -- page by the *current view's* unit: month/week/day (default <C-f>/<C-b>)
-cal:next_day()  cal:prev_day()      -- move the focused day (cursor), regardless of view
-cal:next_week() cal:prev_week()
+cal:next_day()  cal:prev_day()      -- move focus by a day, regardless of view
+cal:next_week() cal:prev_week()     -- move focus by a week
 cal:next_month() cal:prev_month()   -- jumps to day 1 of the target month
+cal:focus_down() cal:focus_up()     -- move focus down/up a row of the *current view* (week in month view, a single day in week/day view)
 cal:goto_date(epoch) cal:today() cal:refresh()
 cal:set_view("month"|"week"|"day")  cal:cycle_view()
 cal:set_position("left"|"right"|"top"|"bottom"|"float")  cal:cycle_position()
@@ -160,8 +161,8 @@ require("almanac")({
 
 | Key | Action |
 |---|---|
-| `h`/`l` | move focused day: previous/next day |
-| `j`/`k` | move focused day: next/previous week |
+| `h`/`l` | move focus: previous/next day (always day-granularity, in every view) |
+| `j`/`k` | move focus down/up **a row of the current view**: a week in month view, a single day in week/day view (matches what's actually on screen — see below) |
 | `<C-f>`/`<C-b>` | page by the current view's unit (month in month view, week in week view, day in day view) |
 | `gt` | today |
 | `gm`/`gw`/`gd` | switch to month/week/day view |
@@ -169,6 +170,8 @@ require("almanac")({
 | `<CR>` | select day/event under cursor (`day_selected`/`event_selected`) |
 | `<C-w><C-w>` | cycle sidebar position (no-op if edgy.nvim is managing it) |
 | `q` | close |
+
+"Focus" is `self.date` — which day the calendar considers currently selected (`selected_day()`/`selected_events()`). The real Neovim cursor is kept in sync with it after every render, so h/j/k/l feel like moving a cursor through the view rather than the text silently changing under a stationary cursor. j/k deliberately mean different things per view (week-at-a-time in month view, day-at-a-time in week/day view) because that's what one row actually is in each — a fixed week-jump for j/k in week/day view would move 7 days on a single keypress, which doesn't match Vim's "j/k move one line" convention there.
 
 ## edgy.nvim integration
 
