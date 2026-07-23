@@ -208,6 +208,32 @@ function Calendar:prev_month()
   return self:goto_date(dateutil.add_months(self.date, -1))
 end
 
+--- Page forward/backward by whatever unit the *current* view shows a
+--- page of — a month at a time in month view, a week at a time in week
+--- view, a day at a time in day view. This is deliberately a single
+--- pair of actions/keys (default <C-f>/<C-b>) rather than three
+--- separate next_month/next_week/next_day bindings: since the view
+--- already determines what's on screen, "page forward" should mean the
+--- same thing regardless of which view you're in, instead of asking
+--- the user to remember a different key per view.
+function Calendar:next()
+  if self.view == "week" then
+    return self:next_week()
+  elseif self.view == "day" then
+    return self:next_day()
+  end
+  return self:next_month()
+end
+
+function Calendar:prev()
+  if self.view == "week" then
+    return self:prev_week()
+  elseif self.view == "day" then
+    return self:prev_day()
+  end
+  return self:prev_month()
+end
+
 -- View switching (3.8) ---------------------------------------------------
 
 --- @param view "month"|"week"|"day"
@@ -310,6 +336,12 @@ function Calendar:_action_fns()
     end,
     next_month = function()
       self:next_month()
+    end,
+    prev = function()
+      self:prev()
+    end,
+    next = function()
+      self:next()
     end,
     today = function()
       self:today()

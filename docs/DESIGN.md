@@ -40,9 +40,10 @@ local cal = Almanac({
 })
 
 cal:show()
-cal:next_month()  cal:prev_month()   -- monthビュー用ナビゲーション(週/日ビュー中でも呼べば該当分だけ月送り)
-cal:next_week()   cal:prev_week()    -- weekビュー用
-cal:next_day()    cal:prev_day()     -- dayビュー用 / month・weekビューではカーソル移動と同義
+cal:next()        cal:prev()          -- 現在のビュー単位でページ送り(month→月送り, week→週送り, day→日送り。既定キー<C-f>/<C-b>。3.4節)
+cal:next_day()    cal:prev_day()      -- カーソル移動(日単位)。ビューに関わらず同じ意味
+cal:next_week()   cal:prev_week()    -- カーソル移動(週単位)
+cal:next_month()  cal:prev_month()   -- 直接月送り(ビューに関わらず月送り。next()の内部実装、独立にも呼べる)
 cal:goto_date(os.time({year=2026, month=8, day=1}))
 cal:today()
 cal:refresh()             -- 現在の表示範囲(view依存)についてeventsを再取得
@@ -112,8 +113,13 @@ cal:cycle_position()       -- left → right → top → bottom → left … と
 
 ```lua
 keys = {
+  -- カーソル移動(ビューが変わっても意味は同じ: 日/週単位で focused day を動かす)
   h = "prev_day", l = "next_day", j = "next_week", k = "prev_week",
-  ["<C-f>"] = "next_month", ["<C-b>"] = "prev_month",
+  -- ページ送り(現在のビュー単位。monthなら月送り、weekなら週送り、dayなら日送り)。
+  -- next_month/next_week/next_day のように粒度ごとに別キーを用意せず、
+  -- 「ビューが変われば送る単位も変わる」1組のキーに統一する設計(ユーザーからのフィードバックで
+  -- 粒度別バインドは使いづらいと判断し、統一した)。
+  ["<C-f>"] = "next", ["<C-b>"] = "prev",
   gt = "today",
   gm = "view_month", gw = "view_week", gd = "view_day", -- 3.8節: g+ニーモニックでビュー直接切り替え(gg/gt等のVim慣習に倣う)
   ["<Tab>"] = "cycle_view", -- month → week → day → month … と巡回切り替え
@@ -123,7 +129,7 @@ keys = {
 }
 ```
 
-既定のアクション名は`next_day`/`prev_day`/`next_week`/`prev_week`/`next_month`/`prev_month`/`today`/`view_month`/`view_week`/`view_day`/`cycle_view`/`select`/`close`/`toggle`/`cycle_position`。`actions`テーブルで独自アクションを追加登録可能(snacksの`actions`踏襲)。
+既定のアクション名は`next_day`/`prev_day`/`next_week`/`prev_week`/`next_month`/`prev_month`/`next`/`prev`/`today`/`view_month`/`view_week`/`view_day`/`cycle_view`/`select`/`close`/`toggle`/`cycle_position`。`next`/`prev`は`next_month`等と違い**現在の`self.view`を見て月/週/日送りのどれかを呼び分ける**薄いディスパッチ(3.1節)。`next_month`等は`next`の内部実装だが、独立したアクション名としても(カスタムキーマップから)呼べる。`actions`テーブルで独自アクションを追加登録可能(snacksの`actions`踏襲)。
 
 ### 3.5 イベント/フック
 

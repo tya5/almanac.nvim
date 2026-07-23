@@ -73,7 +73,8 @@ See [docs/DESIGN.md](docs/DESIGN.md) section 3 for the full spec. Summary:
 
 ```lua
 cal:show() / cal:close() / cal:toggle()
-cal:next_day()  cal:prev_day()
+cal:next() cal:prev()               -- page by the *current view's* unit: month/week/day (default <C-f>/<C-b>)
+cal:next_day()  cal:prev_day()      -- move the focused day (cursor), regardless of view
 cal:next_week() cal:prev_week()
 cal:next_month() cal:prev_month()   -- jumps to day 1 of the target month
 cal:goto_date(epoch) cal:today() cal:refresh()
@@ -107,9 +108,9 @@ require("almanac")({
 
 | Key | Action |
 |---|---|
-| `h`/`l` | previous/next day |
-| `j`/`k` | next/previous week |
-| `<C-f>`/`<C-b>` | next/previous month |
+| `h`/`l` | move focused day: previous/next day |
+| `j`/`k` | move focused day: next/previous week |
+| `<C-f>`/`<C-b>` | page by the current view's unit (month in month view, week in week view, day in day view) |
 | `gt` | today |
 | `gm`/`gw`/`gd` | switch to month/week/day view |
 | `<Tab>` | cycle view (month → week → day) |

@@ -30,12 +30,19 @@ M.defaults = {
   bo = {},
   ---@type table<string, false|string|fun(self:almanac.Calendar)|{[1]:string, desc:string}>
   keys = {
+    -- Cursor movement within the current view (moves the focused day
+    -- by a day/week at a time, regardless of which view is showing).
     h = "prev_day",
     l = "next_day",
     j = "next_week",
     k = "prev_week",
-    ["<C-f>"] = "next_month",
-    ["<C-b>"] = "prev_month",
+    -- Page forward/backward by the *current view's* own unit — a
+    -- month at a time in month view, a week at a time in week view, a
+    -- day at a time in day view (Calendar:next()/:prev()). One pair of
+    -- keys regardless of view, instead of a different next_month/
+    -- next_week/next_day binding per view.
+    ["<C-f>"] = "next",
+    ["<C-b>"] = "prev",
     gt = "today",
     gm = "view_month",
     gw = "view_week",

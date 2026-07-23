@@ -72,6 +72,29 @@ describe("almanac.Calendar", function()
     assert.same({ 2026, 8, 15 }, { dateutil.ymd(cal:selected_day()) })
   end)
 
+  it("next()/prev() page by the current view's own unit", function()
+    cal = Almanac({ date = ymd(2026, 8, 15), view = "month" })
+    cal:show()
+
+    cal:next() -- month view: pages by month
+    assert.same({ 2026, 9, 1 }, { dateutil.ymd(cal:selected_day()) })
+    cal:prev()
+    assert.same({ 2026, 8, 1 }, { dateutil.ymd(cal:selected_day()) })
+
+    cal:goto_date(ymd(2026, 8, 15))
+    cal:set_view("week")
+    cal:next() -- week view: pages by week (+7 days)
+    assert.same({ 2026, 8, 22 }, { dateutil.ymd(cal:selected_day()) })
+    cal:prev()
+    assert.same({ 2026, 8, 15 }, { dateutil.ymd(cal:selected_day()) })
+
+    cal:set_view("day")
+    cal:next() -- day view: pages by day (+1 day)
+    assert.same({ 2026, 8, 16 }, { dateutil.ymd(cal:selected_day()) })
+    cal:prev()
+    assert.same({ 2026, 8, 15 }, { dateutil.ymd(cal:selected_day()) })
+  end)
+
   it("range_changed fires when the visible range actually changes", function()
     cal = Almanac({ date = ymd(2026, 8, 15) })
     cal:show()
