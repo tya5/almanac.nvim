@@ -21,21 +21,34 @@ function M.render(date, events, opts)
 
   local day = range.from
   for _ = 1, 7 do
-    local weekday_name = dateutil.WEEKDAY_NAMES[dateutil.iso_weekday(day)]
+    -- Abbreviated (3-letter) and a fixed-width day number so every
+    -- day's label lines up at the same width ("Mon  3", "Wed 22") —
+    -- full names ("Monday"/"Wednesday") vary enough in length to look
+    -- ragged stacked vertically.
+    local weekday_abbr = dateutil.WEEKDAY_ABBR[dateutil.iso_weekday(day)]
     local _, _, d = dateutil.ymd(day)
     local is_today = dateutil.is_same_day(day, today)
-    local label = is_today and ("[%s %d]"):format(weekday_name, d) or ("%s %d"):format(weekday_name, d)
+    local label = ("%s %2d"):format(weekday_abbr, d)
+    if is_today then
+      label = ("[%s]"):format(label)
+    end
     lines[#lines + 1] = label
     local line_idx = #lines - 1
     line_map[#lines] = { type = "day", epoch = day }
 
+    -- Every day label always gets a highlight distinct from the
+    -- AlmanacEventTitle/Normal used by the event lines below it, so
+    -- the two are never the same color; today/selected/weekend take
+    -- priority over the plain-day default.
+    local hl = "AlmanacWeekdayLabel"
     if is_today then
-      highlights[#highlights + 1] = { line = line_idx, col_start = 0, col_end = -1, hl_group = "AlmanacToday" }
+      hl = "AlmanacToday"
     elseif opts.selected and dateutil.is_same_day(day, opts.selected) then
-      highlights[#highlights + 1] = { line = line_idx, col_start = 0, col_end = -1, hl_group = "AlmanacSelected" }
+      hl = "AlmanacSelected"
     elseif dateutil.is_weekend(day) then
-      highlights[#highlights + 1] = { line = line_idx, col_start = 0, col_end = -1, hl_group = "AlmanacWeekend" }
+      hl = "AlmanacWeekend"
     end
+    highlights[#highlights + 1] = { line = line_idx, col_start = 0, col_end = -1, hl_group = hl }
 
     local day_events = by_day[dateutil.day_key(day)]
     if day_events then

@@ -95,22 +95,40 @@ describe("almanac.render.week", function()
     assert.equals("[Week]", lines[1])
     assert.equals("« Aug 3 - 9 »", lines[2])
 
-    for _, name in ipairs({ "Monday", "Tuesday", "Wednesday", "Thursday", "Saturday", "Sunday" }) do
-      assert.is_not_nil(find_line(lines, name), ("missing weekday label: %s"):format(name))
+    -- Abbreviated (3-letter) weekday labels, fixed-width day number
+    -- (see docs/DESIGN.md 3.8 — full names varied enough in length to
+    -- look ragged stacked vertically).
+    for _, abbr in ipairs({ "Mon", "Tue", "Wed", "Thu", "Sat", "Sun" }) do
+      assert.is_not_nil(find_line(lines, abbr), ("missing weekday label: %s"):format(abbr))
     end
-    -- Friday is today-agnostic here, but should show as "Friday 7" (not
+    -- Friday is today-agnostic here, but should show as "Fri  7" (not
     -- bracketed unless it happens to be the real today in the test env).
-    local fri_idx = find_line(lines, "Friday 7") or find_line(lines, "%[Friday 7%]")
+    local fri_idx = find_line(lines, "Fri  7") or find_line(lines, "%[Fri  7%]")
     assert.is_not_nil(fri_idx)
     assert.truthy(lines[fri_idx + 1]:find("10:00"))
     assert.truthy(lines[fri_idx + 1]:find("Team sync"))
+  end)
+
+  it("gives every weekday label a highlight distinct from AlmanacEventTitle", function()
+    local event = { id = "e1", title = "Team sync", start = ymd(2026, 8, 7, 10, 0) }
+    local lines, highlights = week_render.render(ymd(2026, 8, 7), { event }, { week_start = "monday" })
+
+    local fri_idx = find_line(lines, "Fri  7") or find_line(lines, "%[Fri  7%]")
+    local fri_hl
+    for _, h in ipairs(highlights) do
+      if h.line == fri_idx - 1 then
+        fri_hl = h.hl_group
+      end
+    end
+    assert.is_not_nil(fri_hl)
+    assert.is_not.equals("AlmanacEventTitle", fri_hl)
   end)
 
   it("line_map maps day labels and event lines", function()
     local event = { id = "e1", title = "Team sync", start = ymd(2026, 8, 7, 10, 0) }
     local lines, _, line_map = week_render.render(ymd(2026, 8, 7), { event }, { week_start = "monday" })
 
-    local fri_idx = find_line(lines, "Friday 7") or find_line(lines, "%[Friday 7%]")
+    local fri_idx = find_line(lines, "Fri  7") or find_line(lines, "%[Fri  7%]")
     assert.equals("day", line_map[fri_idx].type)
     assert.equals("event", line_map[fri_idx + 1].type)
     assert.equals("e1", line_map[fri_idx + 1].event.id)

@@ -9,6 +9,10 @@ local DEFAULTS = {
   AlmanacSelected = { link = "Visual" },
   AlmanacHasEvent = { link = "DiagnosticInfo" },
   AlmanacOtherMonth = { link = "NonText" },
+  -- Distinct from AlmanacEventTitle (Normal) so a plain weekday label
+  -- (week view) never renders in the same color as the event lines
+  -- listed under it.
+  AlmanacWeekdayLabel = { link = "Statement" },
   AlmanacEventTitle = { link = "Normal" },
   AlmanacEventTime = { link = "Number" },
   AlmanacTimeAxis = { link = "Comment" },

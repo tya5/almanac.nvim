@@ -149,6 +149,7 @@ cal:on("close", function(self) ... end)
 | `AlmanacSelected` | カーソル位置 |
 | `AlmanacHasEvent` | 予定がある日(month/weekビューのドット等) |
 | `AlmanacOtherMonth` | 前後月の余白セル(monthビュー) |
+| `AlmanacWeekdayLabel` | weekビューの曜日ラベル行(today/selected/weekendのいずれでもない場合の既定色。`AlmanacEventTitle`とは別グループにして予定行と混同しないようにする) |
 | `AlmanacEventTitle` | イベント名(week/dayビューの一覧行) |
 | `AlmanacEventTime` | イベントの時刻表示 |
 | `AlmanacTimeAxis` | dayビューの時間軸(罫線・時刻ラベル) |
@@ -166,7 +167,7 @@ cal:on("close", function(self) ... end)
 
 - **共通ヘッダ**: 1行目に`[Month]`/`[Week]`/`[Day]`のビュー表示、2行目に`« <期間> »`のナビゲーション行(monthなら`August 2026`、weekなら`Aug 3 – Aug 9`、dayなら`Fri, Aug 7 2026`)。書式は`AlmanacHeader`ハイライト。
 - **monthビュー**: 伝統的な週×曜日グリッド(`calendar.nvim`踏襲)。1日1セル、予定は件数によらずドット(`AlmanacHasEvent`)のみ。カーソル行の下に選択日の予定を件名+開始時刻で簡潔に列挙(全件ではなく数件、詳細はweek/dayビューか呼び出し元の責務)。
-- **weekビュー**: 月〜日(`week_start`依存)を縦に7行、各曜日の下にその日の予定を時刻+件名で列挙するアジェンダ形式。予定が無い日は曜日行のみ。
+- **weekビュー**: 月〜日(`week_start`依存)を縦に7行、各曜日の下にその日の予定を時刻+件名で列挙するアジェンダ形式。予定が無い日は曜日行のみ。曜日ラベルは`Mon 3`/`Wed 22`のように**3文字略称+2桁固定幅の日付**で統一し(フルスペル`Monday`/`Wednesday`だと長さがバラついて縦に並べた時にガタつくため)、`AlmanacWeekdayLabel`ハイライトで予定行(`AlmanacEventTitle`)とは別の色になるようにする。
 - **dayビュー**: 選択日の時間軸(1時間刻みの罫線、0-23時固定)を縦に描画し、予定をその時間帯に挿入する形で表示。`location`等の付加情報も表示。
 - ビュー切り替え(`set_view`/`cycle_view`)時は、現在のカーソル位置の日付を保持したまま新ビューの`range`を計算し直し、必要なら`EventProvider`を再度呼ぶ(`range`が変わるため。3.2節)。
 
