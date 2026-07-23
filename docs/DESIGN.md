@@ -88,6 +88,7 @@ cal:cycle_position()       -- left → right → top → bottom → left … と
 ---@field week_start? "sunday"|"monday"         -- 既定: "monday"
 ---@field position? "left"|"right"|"top"|"bottom"|"float"  -- 4節参照。既定: "left"
 ---@field size? number                          -- サイドバーの幅(left/right時)/高さ(top/bottom時)。既定: 30 (列) / 0.3 (行の割合)
+---@field manage_position? "auto"|"always"      -- 既定"auto": edgy.nvim検出時はcycle_position()を無効化しedgy側に位置管理を譲る(6節)。"always"ならedgy有無に関わらずalmanac自前で管理
 ---@field wo? vim.wo|{}                          -- window-local options (snacks.win踏襲)
 ---@field bo? vim.bo|{}                          -- buffer-local options (snacks.win踏襲)
 ---@field keys? table<string, false|string|fun(self:almanac.Calendar)|{[1]:string, desc:string}>  -- 3.4節
@@ -178,9 +179,10 @@ outlook.nvim側に`lua/outlook/calendar.lua`を追加し、
 
 ## 6. エコシステム連携(調査結果)
 
-- **`folke/edgy.nvim`**(サイドバー統括管理プラグイン。nvim-tree/neo-tree/aerial/trouble.nvim等が対応)には**ハード依存しない**。理由: 全ユーザーが導入しているわけではなく、almanac単体でも動く必要があるため。
-  - 連携方法は、almanacのサイドバーバッファに一貫した`filetype`(例: `"almanac"`)を付けておくだけ。edgy.nvim側は`ft`/`filter`によるウィンドウ自動収集の仕組みを持つため、edgy側の設定に`{ ft = "almanac", title = "Calendar", pinned = true }`のようなスタンザをユーザーが1つ足せば、almanacの開閉に合わせてedgyの他サイドバー(ファイルツリー等)が自動リサイズ・協調される。almanac側は何もしなくてよい(=実装コスト・保守コストゼロで連携できる設計)
-  - READMEに「edgy.nvimユーザー向けスタンザ例」をコピペで貼っておく(nvim-tree等と同じ慣習)
+- **`folke/edgy.nvim`**(サイドバー統括管理プラグイン)は**LazyVim公式extra**(`lazyvim.plugins.extras.ui.edgy`、`:LazyExtras`で有効化)として配布されており、neo-tree/Trouble/help/noice/grug-far等を最初から`left`/`right`/`bottom`エッジバーに登録して協調管理している。LazyVimユーザーにとって「サイドバー的なUI」の事実上の標準的な受け皿であるため、**再発明を避けて積極的に連携する**方針に変更(調査前は「オプトインの飾り」程度の位置づけだったが、実態を踏まえて格上げ)。
+  - almanac自体は引き続きedgy.nvimに**ハード依存はしない**(edgy未導入でも単体で動く必要があるため)。サイドバーバッファに一貫した`filetype = "almanac"`を付けておくだけで、edgy側の`ft`/`filter`によるウィンドウ自動収集の仕組みに乗る
+  - READMEに「edgy.nvim(LazyVimの`:LazyExtras` → ui.edgy)ユーザー向けスタンザ例」を明記する: `opts.left`(or `right`)に`{ ft = "almanac", title = "Calendar", size = { width = 30 }, pinned = true }`を1つ足すだけで、他の既存サイドバー(neo-tree等)と自動的にリサイズ・協調配置される
+  - **棲み分け**: edgy.nvimが検出された場合(`pcall(require, "edgy")`)、almanac自身の`cycle_position()`(位置巡回切り替え)は既定で無効化し、位置管理をedgy側に譲る(`opts.manage_position = "auto"`が既定。`"always"`にすればedgy有無に関わらずalmanac自前の位置切り替えを使い続けられる)。両者が同時に同じウィンドウを動かそうとして競合するのを避けるための設計
 - **アイコンプロバイダ**(`nvim-web-devicons`/`mini.icons`)も同様にハード依存せず、`pcall(require, ...)`で存在確認して使う/使わないをフォールバックする(outlook.nvimの`snacks.nvim`有無判定と同じ作法)
 - **`mini.calendar`は存在しない**ことを確認済み(2026年時点)。カレンダーグリッドUIの強い先行実装は無く、almanac.nvimが埋める空き地になっている
 - 参考にした/差別化した先行事例: `wsdjeg/calendar.nvim`(月グリッド+データソース拡張登録という発想の先例だが、ハイライトはリンク済みで悪くない一方UI自体の作り込みは薄い。almanacは同種のデータ抽象化をしつつUIの質で差別化する)
