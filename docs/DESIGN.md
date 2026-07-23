@@ -43,7 +43,7 @@ cal:show()
 cal:next_month()  cal:prev_month()   -- monthビュー用ナビゲーション(週/日ビュー中でも呼べば該当分だけ月送り)
 cal:next_week()   cal:prev_week()    -- weekビュー用
 cal:next_day()    cal:prev_day()     -- dayビュー用 / month・weekビューではカーソル移動と同義
-cal:goto(os.time({year=2026, month=8, day=1}))
+cal:goto_date(os.time({year=2026, month=8, day=1}))
 cal:today()
 cal:refresh()             -- 現在の表示範囲(view依存)についてeventsを再取得
 cal:close()
@@ -100,7 +100,6 @@ cal:cycle_position()       -- left → right → top → bottom → left … と
 ---@field wo? vim.wo|{}                          -- window-local options (snacks.win踏襲)
 ---@field bo? vim.bo|{}                          -- buffer-local options (snacks.win踏襲)
 ---@field keys? table<string, false|string|fun(self:almanac.Calendar)|{[1]:string, desc:string}>  -- 3.4節
----@field format_day? fun(self: almanac.Calendar, day: almanac.Day): string[]  -- セル内テキストのカスタマイズ
 ---@field on_open? fun(self: almanac.Calendar)
 ---@field on_close? fun(self: almanac.Calendar)
 ```
@@ -168,7 +167,7 @@ cal:on("close", function(self) ... end)
 - **共通ヘッダ**: 1行目に`[Month]`/`[Week]`/`[Day]`のビュー表示、2行目に`« <期間> »`のナビゲーション行(monthなら`August 2026`、weekなら`Aug 3 – Aug 9`、dayなら`Fri, Aug 7 2026`)。書式は`AlmanacHeader`ハイライト。
 - **monthビュー**: 伝統的な週×曜日グリッド(`calendar.nvim`踏襲)。1日1セル、予定は件数によらずドット(`AlmanacHasEvent`)のみ。カーソル行の下に選択日の予定を件名+開始時刻で簡潔に列挙(全件ではなく数件、詳細はweek/dayビューか呼び出し元の責務)。
 - **weekビュー**: 月〜日(`week_start`依存)を縦に7行、各曜日の下にその日の予定を時刻+件名で列挙するアジェンダ形式。予定が無い日は曜日行のみ。
-- **dayビュー**: 選択日の時間軸(例: 1時間刻みの罫線)を縦に描画し、予定をその時間帯に挿入する形で表示。`location`/`busy`等の付加情報も表示(`format_day`とは別に、将来`format_event`フックを検討)。
+- **dayビュー**: 選択日の時間軸(1時間刻みの罫線、0-23時固定)を縦に描画し、予定をその時間帯に挿入する形で表示。`location`等の付加情報も表示。
 - ビュー切り替え(`set_view`/`cycle_view`)時は、現在のカーソル位置の日付を保持したまま新ビューの`range`を計算し直し、必要なら`EventProvider`を再度呼ぶ(`range`が変わるため。3.2節)。
 
 ## 4. レンダリング方式: nvim-tree/neo-tree風のサイドウィンドウ
@@ -180,7 +179,7 @@ cal:on("close", function(self) ... end)
 - ウィンドウ管理はnvim-tree同様、「同じウィンドウを使い回す」(`show()`/`toggle()`で既存のサイドバーウィンドウを再利用し、閉じるまで新規ウィンドウを増やさない)。位置変更(`set_position`/`cycle_position`)は一度閉じて指定位置に開き直す形で実装する想定(ウィンドウのその場移動APIはNeovim側に無いため)。
 - サイズは固定値(`opts.size`、列数 or 行数)。ウィンドウ全体に対する追従リサイズ(vim.o.columns変化時の自動調整)は`snacks.win`の`width`/`height`が関数を受け付ける仕組み(3.3節参照)を踏襲すれば将来対応できるが、v1では固定値のみ
 - グリッド再描画は月送り・`refresh()`のたびにバッファ全体を書き換える単純な方式(v1では差分更新はしない)
-- セルのテキストは既定で「日付 + 予定がある場合はドット等のインジケータ」。`format_day`で完全にカスタマイズ可能
+- セルのテキストは「日付 + 予定がある場合はドット(•)」固定(v1)。任意のテキストへのカスタマイズフックは持たない(過剰実装を避け、必要になれば`format_day`/`format_event`としてv2以降で追加検討)
 
 ### 4.1 描画の実装技術(ネットで実現手段を調査した結果の反映)
 
@@ -215,4 +214,4 @@ outlook.nvim側に`lua/outlook/calendar.lua`を追加し、
 ## 7. 段階的ロードマップ
 
 - **v1**: 月/週/日の3ビュー表示・切り替え、静的/非同期`EventProvider`、キーマップ・ハイライトのカスタマイズ、`snacks.win`踏襲のLuaCATS型注釈、サイドバー配置切り替え(left/right/top/bottom/float)、edgy.nvim連携
-- **v2**: 年表示、`format_event`フックによるイベント表示のさらなるカスタマイズ
+- **v2**: 年表示、`format_day`/`format_event`フックによるセル・イベント表示のカスタマイズ
