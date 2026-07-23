@@ -4,7 +4,59 @@ A generic, data-source-agnostic calendar/agenda UI for Neovim: month, week, and 
 
 Its first consumer is [outlook.nvim](https://github.com/tya5/outlook.nvim) (an Outlook COM bridge), but almanac.nvim has no dependency on it or on any specific data source — Google Calendar, org-mode, a local `.ics` file, anything that can produce a list of `{id, title, start, ...}` events works.
 
-> **Status:** v1 implemented (month/week/day views, sidebar window management, position/view cycling, edgy.nvim-aware). Not yet published/tagged for wider use. See [docs/DESIGN.md](docs/DESIGN.md) for the full API/IF spec and design rationale.
+> **Status:** v1 implemented (month/week/day views, sidebar window management, position/view cycling, edgy.nvim-aware). Not yet tagged/versioned for wider distribution. See [docs/DESIGN.md](docs/DESIGN.md) for the full API/IF spec and design rationale.
+
+## Preview
+
+Left sidebar, month view (`<CR>` on a day shows its agenda below the grid; `•` marks a day with events):
+
+```
+[Month]
+« July 2026 »
+Mo  Tu  We  Th  Fr  Sa  Su
+29  30   1   2   3   4   5
+ 6   7   8   9  10  11  12
+13  14  15  16  17  18  19
+20  21  22  23  24• 25• 26
+27  28  29  30  31   1   2
+
+Fri, Jul 24 2026
+  08:16 Team sync
+  09:16 1:1 with Sam
+```
+
+Week view (`gw`) — one row per day, events listed underneath:
+
+```
+[Week]
+« Jul 20 - 26 »
+Mon 20
+Tue 21
+Wed 22
+Thu 23
+Fri 24
+  08:16 Team sync
+  09:16 1:1 with Sam
+Sat 25
+  08:16 Design review
+Sun 26
+```
+
+Day view (`gd`) — hourly time-axis:
+
+```
+[Day]
+« Fri, Jul 24 2026 »
+00:00 -------------
+...
+07:00 -------------
+08:00 -- Team sync
+      |  Location: Zoom
+09:00 -- 1:1 with Sam
+10:00 -------------
+...
+23:00 -------------
+```
 
 ## Features
 
