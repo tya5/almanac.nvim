@@ -30,19 +30,29 @@ M.defaults = {
   bo = {},
   ---@type table<string, false|string|fun(self:almanac.Calendar)|{[1]:string, desc:string}>
   keys = {
-    -- Cursor movement within the current view, matching standard Vim
-    -- h/j/k/l directions against what's actually on screen:
-    --  h/l (left/right): always a day at a time — in month view that's
-    --  literally the cell to the left/right in the grid.
-    --  j/k (down/up): whatever one row of the *current view* is — a
-    --  week in month view (moving down a grid row = +7 days), but a
-    --  single day in week/day view (each row there IS one day; using
-    --  next_week/prev_week for j/k there would jump 7 days on one
-    --  keypress instead of moving one line down the list).
-    h = "prev_day",
-    l = "next_day",
-    j = "focus_down",
-    k = "focus_up",
+    -- Screen-driven navigation: h/j/k/l move focus to whatever is
+    -- actually rendered next to the cursor right now (per the
+    -- renderer's line_map), never by computing a new date first and
+    -- deriving a screen position from it. Date arithmetic only runs as
+    -- a fallback once navigation reaches the edge of what's currently
+    -- drawn (e.g. j on the last rendered line pages to the next
+    -- week/month/day via next()).
+    --  h/l (left/right): move within the current grid row (month
+    --  view's day cells); a no-op on single-item-per-row views
+    --  (week/day), since there's nothing to the side to move to.
+    --  j/k (down/up): move to the next/previous rendered line — a day
+    --  cell, an agenda day label, or an event line, whichever is
+    --  actually there. This is why month view's grid flows straight
+    --  into its trailing per-day agenda, and why week/day view stops
+    --  on event lines instead of always moving a fixed one day.
+    h = "move_left",
+    l = "move_right",
+    j = "move_down",
+    k = "move_up",
+    -- Jump directly between event lines in the currently rendered
+    -- content only (no paging; wraps at the first/last event).
+    ["]e"] = "next_event",
+    ["[e"] = "prev_event",
     -- Page forward/backward by the *current view's* own unit — a
     -- month at a time in month view, a week at a time in week view, a
     -- day at a time in day view (Calendar:next()/:prev()). One pair of

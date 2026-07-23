@@ -95,24 +95,92 @@ describe("almanac.Calendar", function()
     assert.same({ 2026, 8, 15 }, { dateutil.ymd(cal:selected_day()) })
   end)
 
-  it("focus_down()/focus_up() (j/k) step by a week in month view but a day in week/day view", function()
+  it("move_down()/move_up() (j/k) follow the rendered line_map, not date arithmetic", function()
     cal = Almanac({ date = ymd(2026, 8, 15), view = "month" })
     cal:show()
 
-    cal:focus_down() -- month view: down a grid row = +7 days
+    cal:move_down() -- month view: down a grid row = +7 days (next rendered row)
     assert.same({ 2026, 8, 22 }, { dateutil.ymd(cal:selected_day()) })
-    cal:focus_up()
+    cal:move_up()
     assert.same({ 2026, 8, 15 }, { dateutil.ymd(cal:selected_day()) })
 
     cal:set_view("week")
-    cal:focus_down() -- week view: down one line = +1 day, not +7
+    cal:move_down() -- week view: down one rendered line = +1 day, not +7
     assert.same({ 2026, 8, 16 }, { dateutil.ymd(cal:selected_day()) })
-    cal:focus_up()
+    cal:move_up()
     assert.same({ 2026, 8, 15 }, { dateutil.ymd(cal:selected_day()) })
 
+    -- Day view's rendered rows (hourly) are all *within the same day*,
+    -- so a single move_down() there just steps to the next hour row —
+    -- it must NOT change the selected day, since that would mean
+    -- falling back to date arithmetic before actually running off the
+    -- rendered content's edge.
     cal:set_view("day")
-    cal:focus_down()
+    cal:goto_date(ymd(2026, 8, 15))
+    vim.api.nvim_win_set_cursor(cal.win, { 4, 0 }) -- first hour row
+    cal:move_down()
+    assert.same({ 2026, 8, 15 }, { dateutil.ymd(cal:selected_day()) })
+  end)
+
+  it("move_down() pages to the next week only after running off the bottom of week view", function()
+    cal = Almanac({ date = ymd(2026, 8, 16), view = "week" }) -- a Sunday: last row of its (Monday-start) week
+    cal:show()
+
+    local fire_count = 0
+    cal:on("range_changed", function()
+      fire_count = fire_count + 1
+    end)
+
+    cal:move_down() -- last rendered row: falls back to paging (next())
+    assert.same({ 2026, 8, 23 }, { dateutil.ymd(cal:selected_day()) })
+    assert.equals(1, fire_count)
+  end)
+
+  it("move_down() pages to the next day only after running off the bottom of day view", function()
+    cal = Almanac({ date = ymd(2026, 8, 15), view = "day" })
+    cal:show()
+
+    vim.api.nvim_win_set_cursor(cal.win, { 27, 0 }) -- last hour row (23:00)
+    cal:move_down() -- falls back to paging (next_day() via next())
     assert.same({ 2026, 8, 16 }, { dateutil.ymd(cal:selected_day()) })
+  end)
+
+  it("move_left()/move_right() (h/l) move within a month grid row but no-op on week/day view", function()
+    cal = Almanac({ date = ymd(2026, 8, 15), view = "month" }) -- Saturday
+    cal:show()
+
+    cal:move_right()
+    assert.same({ 2026, 8, 16 }, { dateutil.ymd(cal:selected_day()) })
+    cal:move_left()
+    assert.same({ 2026, 8, 15 }, { dateutil.ymd(cal:selected_day()) })
+
+    cal:set_view("week")
+    cal:move_right() -- no cells to move within on a single-item row: no-op
+    assert.same({ 2026, 8, 15 }, { dateutil.ymd(cal:selected_day()) })
+  end)
+
+  it("j/k stop on event lines (focused_event()) and next_event()/prev_event() jump directly between them", function()
+    local e1 = { id = "e1", title = "Standup", start = ymd(2026, 8, 15, 9, 0) }
+    local e2 = { id = "e2", title = "Review", start = ymd(2026, 8, 15, 14, 0) }
+    cal = Almanac({ date = ymd(2026, 8, 15), view = "day", events = { e1, e2 } })
+    cal:show()
+
+    assert.is_nil(cal:focused_event())
+
+    cal:next_event()
+    assert.equals("e1", cal:focused_event().id)
+    cal:next_event()
+    assert.equals("e2", cal:focused_event().id)
+    cal:next_event() -- wraps
+    assert.equals("e1", cal:focused_event().id)
+
+    cal:prev_event()
+    assert.equals("e2", cal:focused_event().id)
+
+    -- moving down from an event line clears event focus once we leave
+    -- its line for a plain hour row
+    cal:move_down()
+    assert.is_nil(cal:focused_event())
   end)
 
   it("moves the real cursor onto the focused day after every render (not just the highlight)", function()

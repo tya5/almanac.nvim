@@ -129,11 +129,13 @@ cal:next() cal:prev()               -- page by the *current view's* unit: month/
 cal:next_day()  cal:prev_day()      -- move focus by a day, regardless of view
 cal:next_week() cal:prev_week()     -- move focus by a week
 cal:next_month() cal:prev_month()   -- jumps to day 1 of the target month
-cal:focus_down() cal:focus_up()     -- move focus down/up a row of the *current view* (week in month view, a single day in week/day view)
+cal:move_down() cal:move_up()       -- move focus to the next/previous *rendered* line (day cell, agenda day, or event); pages only past the rendered edge (default j/k)
+cal:move_left() cal:move_right()    -- move focus within the current grid row (month view); no-op on single-item rows (default h/l)
+cal:next_event() cal:prev_event()   -- jump directly between event lines in the current render, no paging, wraps at the edges (default ]e/[e)
 cal:goto_date(epoch) cal:today() cal:refresh()
 cal:set_view("month"|"week"|"day")  cal:cycle_view()
 cal:set_position("left"|"right"|"top"|"bottom"|"float")  cal:cycle_position()
-cal:selected_day()  cal:selected_events()
+cal:selected_day()  cal:selected_events()  cal:focused_event()
 cal:on(event, callback)   -- range_changed, view_changed, day_selected, event_selected, position_changed, close
 cal:map(lhs, action)      -- same shapes as opts.keys
 ```
@@ -161,8 +163,9 @@ require("almanac")({
 
 | Key | Action |
 |---|---|
-| `h`/`l` | move focus: previous/next day (always day-granularity, in every view) |
-| `j`/`k` | move focus down/up **a row of the current view**: a week in month view, a single day in week/day view (matches what's actually on screen — see below) |
+| `h`/`l` | move focus within the current row's cells (month view's grid); no-op on rows with only one item (week/day view) |
+| `j`/`k` | move focus to the next/previous **rendered line** — a grid row, an agenda day label, or an event line, whichever is actually there |
+| `]e`/`[e` | jump directly to the next/previous **event line** in the current render only (no paging; wraps at the first/last event) |
 | `<C-f>`/`<C-b>` | page by the current view's unit (month in month view, week in week view, day in day view) |
 | `gt` | today |
 | `gm`/`gw`/`gd` | switch to month/week/day view |
@@ -171,7 +174,9 @@ require("almanac")({
 | `<C-w><C-w>` | cycle sidebar position (no-op if edgy.nvim is managing it) |
 | `q` | close |
 
-"Focus" is `self.date` — which day the calendar considers currently selected (`selected_day()`/`selected_events()`). The real Neovim cursor is kept in sync with it after every render, so h/j/k/l feel like moving a cursor through the view rather than the text silently changing under a stationary cursor. j/k deliberately mean different things per view (week-at-a-time in month view, day-at-a-time in week/day view) because that's what one row actually is in each — a fixed week-jump for j/k in week/day view would move 7 days on a single keypress, which doesn't match Vim's "j/k move one line" convention there.
+"Focus" is `self.date` (plus `self:focused_event()` when focus has landed on a specific event) — the day/event the calendar considers currently selected. The real Neovim cursor is kept in sync with it after every render, so h/j/k/l feel like moving a cursor through the view rather than the text silently changing under a stationary cursor.
+
+h/j/k/l are **screen-driven**: each keypress moves focus to whatever is actually rendered next to the cursor right now (via the renderer's `line_map`), never by computing a new date first and deriving a screen position from it. Date arithmetic (`next_day`/`next_week`/etc.) only runs as a fallback once navigation reaches the edge of what's currently drawn — e.g. `j` on the last rendered line pages to the next week/month/day and lands wherever that page's own render puts focus. This is also why month view's grid flows straight into its trailing per-day agenda with no special-casing, and why week/day view's `j`/`k` naturally stop on event lines instead of always moving exactly one day.
 
 ## edgy.nvim integration
 

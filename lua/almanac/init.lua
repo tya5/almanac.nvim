@@ -105,6 +105,12 @@ function Calendar:render()
     local lines, hl, line_map =
       renderer.render(self.date, events, { week_start = self.opts.week_start, selected = self.date })
     self._line_map = line_map or {}
+    -- A fresh render means fresh data (paging/view switch/refresh); any
+    -- previous event-level focus no longer corresponds to anything on
+    -- screen, so fall back to day-level focus (self.date) here. Within-
+    -- view navigation (move_down/next_event/etc.) never calls render(),
+    -- so it's free to set focused_event without it being clobbered.
+    self._focused_event = nil
     winmod.set_lines(self.buf, lines)
     winmod.set_highlights(self.buf, hl, ns)
     self:_sync_cursor_to_date()
@@ -260,26 +266,220 @@ function Calendar:prev()
   return self:prev_month()
 end
 
---- j/k ("down"/"up"): moves the focused day by whatever one row of the
---- *current view* actually represents. In month view a row is a week,
---- so down/up means next_week/prev_week (matches moving down/up a row
---- in the grid). In week and day view, each row is a single day (week
---- view lists one day per line; day view has no row-of-days at all),
---- so down/up there means next_day/prev_day — using next_week there
---- would jump seven days on a single j press, which doesn't match
---- moving down one line in a vertical day-per-line list.
-function Calendar:focus_down()
-  if self.view == "month" then
-    return self:next_week()
+-- Screen-driven hjkl navigation ------------------------------------------
+--
+-- Principle: a keypress moves focus to whatever is actually rendered
+-- immediately next to the cursor (per self._line_map), never by
+-- computing a new date and re-deriving a screen position from it. Date
+-- arithmetic (next_day/next_week/etc., above) only kicks in as a
+-- fallback *after* navigation runs off the edge of what's currently
+-- drawn — e.g. j on the last rendered line pages to the next
+-- week/month/day and lands wherever that page's own render naturally
+-- puts focus. This also means month view's grid flows straight into
+-- its trailing per-day agenda (agenda rows are just more line_map rows)
+-- with no special-casing between "grid" and "agenda".
+
+--- @return integer? row, integer? col current cursor position, or nil
+--- if there is no valid sidebar window right now
+function Calendar:_cursor_pos()
+  if not (self.win and vim.api.nvim_win_is_valid(self.win)) then
+    return nil, nil
   end
-  return self:next_day()
+  local pos = vim.api.nvim_win_get_cursor(self.win)
+  return pos[1], pos[2]
 end
 
-function Calendar:focus_up()
-  if self.view == "month" then
-    return self:prev_week()
+--- @return integer[] line numbers present in self._line_map, ascending
+function Calendar:_sorted_line_map_lines()
+  local lines = {}
+  for line in pairs(self._line_map) do
+    lines[#lines + 1] = line
   end
-  return self:prev_day()
+  table.sort(lines)
+  return lines
+end
+
+--- Move focus (self.date/self._focused_event) and the real cursor onto
+--- the given already-rendered line_map row, without a re-render.
+--- @param line integer
+--- @param preferred_col integer column to prefer when landing on a
+--- day_segments row with multiple cells (used to keep the same weekday
+--- column when moving vertically through the month grid)
+--- @return boolean ok
+function Calendar:_focus_line(line, preferred_col)
+  local entry = self._line_map[line]
+  if not entry then
+    return false
+  end
+  if entry.type == "day_segments" then
+    local seg = entry.segments[1]
+    for _, s in ipairs(entry.segments) do
+      if preferred_col >= s.col_start and preferred_col < s.col_end then
+        seg = s
+        break
+      end
+    end
+    self.date = seg.epoch
+    self._focused_event = nil
+    pcall(vim.api.nvim_win_set_cursor, self.win, { line, seg.col_start })
+  elseif entry.type == "day" then
+    self.date = entry.epoch
+    self._focused_event = nil
+    pcall(vim.api.nvim_win_set_cursor, self.win, { line, 0 })
+  elseif entry.type == "event" then
+    self.date = dateutil.start_of_day(entry.event.start)
+    self._focused_event = entry.event
+    pcall(vim.api.nvim_win_set_cursor, self.win, { line, 0 })
+  else
+    return false
+  end
+  return true
+end
+
+--- @return almanac.Event? the event under focus, if focus is currently
+--- on an event line (nil if focus is on a plain day)
+function Calendar:focused_event()
+  return self._focused_event
+end
+
+function Calendar:_move_vertical(direction)
+  local row, col = self:_cursor_pos()
+  if not row then
+    return
+  end
+  local lines = self:_sorted_line_map_lines()
+  local idx
+  for i, l in ipairs(lines) do
+    if l == row then
+      idx = i
+      break
+    end
+  end
+  if not idx then
+    for i, l in ipairs(lines) do
+      if l > row then
+        idx = i - 1
+        break
+      end
+    end
+    idx = idx or #lines
+  end
+
+  local target_idx = idx + direction
+  if target_idx < 1 or target_idx > #lines then
+    -- Ran off the edge of what's currently rendered: only *now* fall
+    -- back to date-arithmetic paging (next()/prev() already knows how
+    -- to page by the current view's own unit).
+    if direction > 0 then
+      self:next()
+    else
+      self:prev()
+    end
+    return
+  end
+
+  self:_focus_line(lines[target_idx], col)
+end
+
+--- j: move focus to the next rendered row (day label, grid row, or
+--- event line) below the cursor; pages forward only past the last row.
+function Calendar:move_down()
+  self:_move_vertical(1)
+end
+
+--- k: same as move_down(), upward.
+function Calendar:move_up()
+  self:_move_vertical(-1)
+end
+
+function Calendar:_move_horizontal(direction)
+  local row, col = self:_cursor_pos()
+  if not row then
+    return
+  end
+  local entry = self._line_map[row]
+  if not entry or entry.type ~= "day_segments" then
+    -- No cells to the left/right on this row (week/day view rows are
+    -- one item each) — intentionally a no-op rather than forcing a day
+    -- jump that doesn't correspond to anything visible here.
+    return
+  end
+  local current_idx
+  for i, seg in ipairs(entry.segments) do
+    if col >= seg.col_start and col < seg.col_end then
+      current_idx = i
+      break
+    end
+  end
+  if not current_idx then
+    return
+  end
+  local target_idx = current_idx + direction
+  if target_idx < 1 or target_idx > #entry.segments then
+    return
+  end
+  local seg = entry.segments[target_idx]
+  self.date = seg.epoch
+  self._focused_event = nil
+  pcall(vim.api.nvim_win_set_cursor, self.win, { row, seg.col_start })
+end
+
+--- l: move focus one cell right within the current grid row (month
+--- view only; no-op on single-item-per-row rows like week/day view).
+function Calendar:move_right()
+  self:_move_horizontal(1)
+end
+
+--- h: same as move_right(), leftward.
+function Calendar:move_left()
+  self:_move_horizontal(-1)
+end
+
+function Calendar:_move_to_event(direction)
+  local row = self:_cursor_pos()
+  if not row then
+    return
+  end
+  local event_lines = {}
+  for line, entry in pairs(self._line_map) do
+    if entry.type == "event" then
+      event_lines[#event_lines + 1] = line
+    end
+  end
+  if #event_lines == 0 then
+    return
+  end
+  table.sort(event_lines)
+  local target
+  if direction > 0 then
+    for _, line in ipairs(event_lines) do
+      if line > row then
+        target = line
+        break
+      end
+    end
+    target = target or event_lines[1]
+  else
+    for i = #event_lines, 1, -1 do
+      if event_lines[i] < row then
+        target = event_lines[i]
+        break
+      end
+    end
+    target = target or event_lines[#event_lines]
+  end
+  self:_focus_line(target, 0)
+end
+
+--- ]e: jump directly to the next event line in the currently rendered
+--- content (no paging; wraps to the first event past the last one).
+function Calendar:next_event()
+  self:_move_to_event(1)
+end
+
+--- [e: same as next_event(), backward.
+function Calendar:prev_event()
+  self:_move_to_event(-1)
 end
 
 -- View switching (3.8) ---------------------------------------------------
@@ -391,11 +591,23 @@ function Calendar:_action_fns()
     next = function()
       self:next()
     end,
-    focus_down = function()
-      self:focus_down()
+    move_down = function()
+      self:move_down()
     end,
-    focus_up = function()
-      self:focus_up()
+    move_up = function()
+      self:move_up()
+    end,
+    move_left = function()
+      self:move_left()
+    end,
+    move_right = function()
+      self:move_right()
+    end,
+    next_event = function()
+      self:next_event()
+    end,
+    prev_event = function()
+      self:prev_event()
     end,
     today = function()
       self:today()
@@ -475,6 +687,7 @@ function M.new(opts)
   self._handlers = {}
   self._line_map = {}
   self._events_by_day = {}
+  self._focused_event = nil
   self:_recompute_range()
   return self
 end
