@@ -18,16 +18,21 @@ function M.render(date, events, opts)
   local lines, highlights = header.render("Month", dateutil.format_month_header(date))
   local line_map = {}
 
+  local cell_width = 3 -- 2-digit day number + 1 marker char
+
   local order = week_start == "sunday" and { 7, 1, 2, 3, 4, 5, 6 } or { 1, 2, 3, 4, 5, 6, 7 }
   local names = {}
   for _, idx in ipairs(order) do
-    names[#names + 1] = dateutil.WEEKDAY_ABBR2[idx]
+    -- Padded to cell_width so the header lines up with the day-number
+    -- grid below (each grid cell is a 2-digit day + 1 marker char,
+    -- i.e. 3 wide; the 2-char weekday abbreviation alone drifted out
+    -- of alignment by one column per week — not a font issue).
+    names[#names + 1] = ("%-" .. cell_width .. "s"):format(dateutil.WEEKDAY_ABBR2[idx])
   end
   lines[#lines + 1] = table.concat(names, " ")
   highlights[#highlights + 1] = { line = #lines - 1, col_start = 0, col_end = -1, hl_group = "AlmanacHeader" }
 
   local weeks = dateutil.month_grid(date, week_start)
-  local cell_width = 3 -- 2-digit day number + 1 marker char
 
   for _, week in ipairs(weeks) do
     local cell_texts = {}

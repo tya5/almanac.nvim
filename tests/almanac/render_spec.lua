@@ -23,7 +23,21 @@ describe("almanac.render.month", function()
 
     assert.equals("[Month]", lines[1])
     assert.equals("« August 2026 »", lines[2])
-    assert.equals("Mo Tu We Th Fr Sa Su", lines[4])
+    assert.equals("Mo  Tu  We  Th  Fr  Sa  Su ", lines[4])
+
+    -- The weekday header and the day-number grid must use the same
+    -- per-column stride (4 chars: a 3-wide cell + 1 separator), or the
+    -- columns drift out of alignment moving right across the row (a
+    -- real bug this caught: the header's cells used to be 2 chars
+    -- wide while the grid's cells are 3 chars wide, misaligning by one
+    -- column per week — not a font rendering issue).
+    local grid_row = lines[5]
+    assert.equals(#lines[4], #grid_row)
+    for col = 0, 6 do
+      local start = col * 4 + 1
+      assert.truthy(lines[4]:sub(start, start):match("%a"), ("expected a weekday letter at col %d"):format(col))
+      assert.truthy(grid_row:sub(start, start + 1):match("%d"), ("expected a day digit at col %d"):format(col))
+    end
 
     local idx, line = find_line(lines, " 8\u{2022}")
     assert.is_not_nil(idx, "expected a bullet marker after day 8's number")
