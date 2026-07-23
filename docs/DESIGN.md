@@ -2,7 +2,7 @@
 
 ## 1. これは何か
 
-**汎用の月グリッド・カレンダー表示UIプラグイン。** snacks.nvimの`Snacks.picker`/`Snacks.win`が「汎用の一覧UI」「汎用のウィンドウUI」を提供し、多数のプラグインがそれを土台にしているのと同じ立ち位置を、カレンダー/予定表示について担う。
+**汎用のカレンダー/予定表示UIプラグイン。** 月・週・日の3ビューを切り替えられる。snacks.nvimの`Snacks.picker`/`Snacks.win`が「汎用の一覧UI」「汎用のウィンドウUI」を提供し、多数のプラグインがそれを土台にしているのと同じ立ち位置を、カレンダー/予定表示について担う。
 
 - almanac.nvim自身は**データソースを一切知らない**。Outlook・Google Calendar・org-mode・ローカルの`.ics`ファイル等、何であっても「予定のリスト」を渡せれば表示できる
 - [outlook.nvim](https://github.com/tya5/outlook.nvim) はこのプラグインの最初の利用者(データプロバイダ)になる想定。outlook.nvim側にカレンダーUIは実装せず、Outlook COMから取得した予定をalmanac.nvimの`Event`形式に変換して渡すだけにする
@@ -10,15 +10,14 @@
 ## 2. ゴールと非ゴール(v1)
 
 **ゴール**
-- 月グリッド表示(`calendar.nvim`のような伝統的なカレンダー見た目)
+- **月・週・日の3ビュー**表示、キー1つで切り替え可能(`gm`/`gw`/`gd`、`cycle_view()`)。3ビューとも同じ`Event`データモデル・同じ`EventProvider`の上に別レンダラとして実装する(3.8節)
 - 任意のデータソースから予定を受け取れる汎用API/IF(このドキュメントの核心)
 - snacks.nvimの設計作法(`snacks.win`の公開API)に倣った、他プラグインが違和感なく使えるAPI
 
 **非ゴール(v1)**
-- アジェンダ(縦一覧)表示 — 将来検討。同じ`Event`データモデルの上に別レンダラとして足せる設計にはしておく
 - 予定の編集・作成(read-only表示のみ。書き込みは呼び出し元プラグインの責務)
 - 出欠回答・招待送信などの操作(そもそもalmanac.nvimはデータソースを知らないため対象外)
-- 年表示・週表示(将来検討)
+- 年表示(将来検討)
 
 ### 2.1 UI言語ポリシー
 
@@ -35,18 +34,22 @@
 local Almanac = require("almanac")
 
 local cal = Almanac({
-  date = os.time(),        -- 初期表示月(既定: 今日)
+  date = os.time(),        -- 初期表示日(既定: 今日)
+  view = "month",          -- "month"|"week"|"day"(既定: "month")
   events = my_event_provider, -- 3.2節参照
 })
 
 cal:show()
-cal:next_month()
-cal:prev_month()
+cal:next_month()  cal:prev_month()   -- monthビュー用ナビゲーション(週/日ビュー中でも呼べば該当分だけ月送り)
+cal:next_week()   cal:prev_week()    -- weekビュー用
+cal:next_day()    cal:prev_day()     -- dayビュー用 / month・weekビューではカーソル移動と同義
 cal:goto(os.time({year=2026, month=8, day=1}))
 cal:today()
-cal:refresh()             -- 現在表示中の月についてeventsを再取得
+cal:refresh()             -- 現在の表示範囲(view依存)についてeventsを再取得
 cal:close()
 cal:toggle()
+cal:set_view("week")       -- "month"|"week"|"day" へ切り替え(3.8節)
+cal:cycle_view()           -- month → week → day → month … と巡回切り替え(既定キー: 3.4節)
 cal:selected_day()        -- カーソルがある日付(epoch integer)を返す
 cal:selected_events()      -- その日のEvent[]を返す
 cal:on(event, cb)          -- 3.5節
@@ -74,11 +77,11 @@ cal:cycle_position()       -- left → right → top → bottom → left … と
 ---| fun(range: almanac.Range, cb: fun(events: almanac.Event[]))   # 非同期: 表示範囲が変わるたびに呼ばれる
 
 ---@class almanac.Range
----@field from integer  -- 表示している月グリッドの最初の日(epoch, 前月の余白日を含む)
----@field to integer    -- 最後の日(epoch, 翌月の余白日を含む)
+---@field from integer  -- 表示範囲の最初の日(epoch)。monthビューなら月グリッドの前月余白日を含む、weekビューならその週の月曜(week_start依存)、dayビューならその日0時
+---@field to integer    -- 表示範囲の最後の日(epoch)。monthビューは翌月余白日を含む、weekビューはその週の日曜、dayビューはその日
 ```
 
-- `snacks.picker`の`finder`契約(テーブル固定 or 非同期コールバック関数のどちらでも渡せる)を踏襲。月を送る/戻るたびに`range`が変わり、`EventProvider`が関数であれば毎回呼び出される(snacksのfinderが「フィルタ変更時に再実行」される契約と同じ形)
+- `snacks.picker`の`finder`契約(テーブル固定 or 非同期コールバック関数のどちらでも渡せる)を踏襲。月/週/日を送る・ビューを切り替えるたびに`range`が変わり、`EventProvider`が関数であれば毎回呼び出される(snacksのfinderが「フィルタ変更時に再実行」される契約と同じ形)。**`range`の粒度は現在のビューに依存する**(3.8節) — 呼び出し元は`view`を意識せず「この期間のイベントをくれ」とだけ実装すればよく、月/週/日の切り替えロジックはalmanac側に閉じる
 - **日付はepoch秒(`integer`)で統一**し、ISO文字列等は受け付けない。タイムゾーン変換・"月"の境界の解釈(ローカルタイムかUTCか)は呼び出し元の責務とし、almanac.nvim自身はタイムゾーンを一切意識しない。これによりOutlook(`ReceivedTime`はPowerShell側で既にローカル`DateTime`)でもorg-mode(`os.time`ベース)でも同じ契約で渡せる
 - `id`はalmanac内部では文字列キーとしてのみ扱う(重複防止・選択状態の追跡に使うのみで、意味は一切解釈しない)
 - `data`フィールドが「呼び出し元の秘密の抜け道」で、outlook.nvimなら`{entry_id=, store_id=}`を積んでおき、`cal:on("select_event", function(ev) ... end)`で受け取って`get_message`を呼ぶ、という使い方を想定
@@ -87,7 +90,8 @@ cal:cycle_position()       -- left → right → top → bottom → left … と
 
 ```lua
 ---@class almanac.Config
----@field date? integer                        -- 初期表示月(epoch)。既定: 今日
+---@field date? integer                        -- 初期表示日(epoch)。既定: 今日
+---@field view? "month"|"week"|"day"            -- 既定: "month"(3.8節)
 ---@field events? almanac.EventProvider
 ---@field week_start? "sunday"|"monday"         -- 既定: "monday"
 ---@field position? "left"|"right"|"top"|"bottom"|"float"  -- 4節参照。既定: "left"
@@ -112,20 +116,23 @@ keys = {
   h = "prev_day", l = "next_day", j = "next_week", k = "prev_week",
   ["<C-f>"] = "next_month", ["<C-b>"] = "prev_month",
   gt = "today",
-  ["<CR>"] = "select",  -- on("select_day")/on("select_event") 発火
+  gm = "view_month", gw = "view_week", gd = "view_day", -- 3.8節: g+ニーモニックでビュー直接切り替え(gg/gt等のVim慣習に倣う)
+  ["<Tab>"] = "cycle_view", -- month → week → day → month … と巡回切り替え
+  ["<CR>"] = "select",  -- on("day_selected")/on("event_selected") 発火
   ["<C-w><C-w>"] = "cycle_position", -- 4節: サイドバーの配置(左/右/上/下)を巡回切り替え
   q = "close",
 }
 ```
 
-既定のアクション名は`next_day`/`prev_day`/`next_week`/`prev_week`/`next_month`/`prev_month`/`today`/`select`/`close`/`toggle`/`cycle_position`。`actions`テーブルで独自アクションを追加登録可能(snacksの`actions`踏襲)。
+既定のアクション名は`next_day`/`prev_day`/`next_week`/`prev_week`/`next_month`/`prev_month`/`today`/`view_month`/`view_week`/`view_day`/`cycle_view`/`select`/`close`/`toggle`/`cycle_position`。`actions`テーブルで独自アクションを追加登録可能(snacksの`actions`踏襲)。
 
 ### 3.5 イベント/フック
 
 `snacks.win`の`:on(event, cb, opts)`をそのまま踏襲。
 
 ```lua
-cal:on("month_changed", function(self, range) ... end)
+cal:on("range_changed", function(self, range) ... end)  -- 月送り/週送り/日送り/ビュー切り替え、いずれでも range が変われば発火
+cal:on("view_changed", function(self, view) ... end)      -- "month"|"week"|"day"
 cal:on("day_selected", function(self, day) ... end)
 cal:on("event_selected", function(self, event) ... end) -- event.data に呼び出し元のペイロード
 cal:on("position_changed", function(self, position) ... end) -- 4節: left/right/top/bottom/float切り替え時
@@ -141,14 +148,28 @@ cal:on("close", function(self) ... end)
 | `AlmanacToday` | 今日のセル |
 | `AlmanacWeekend` | 土日のセル |
 | `AlmanacSelected` | カーソル位置 |
-| `AlmanacHasEvent` | 予定がある日 |
-| `AlmanacOtherMonth` | 前後月の余白セル |
+| `AlmanacHasEvent` | 予定がある日(month/weekビューのドット等) |
+| `AlmanacOtherMonth` | 前後月の余白セル(monthビュー) |
+| `AlmanacEventTitle` | イベント名(week/dayビューの一覧行) |
+| `AlmanacEventTime` | イベントの時刻表示 |
+| `AlmanacTimeAxis` | dayビューの時間軸(罫線・時刻ラベル) |
+| `AlmanacHeader` | ヘッダ行(`« August 2026 »`等)・`[Month]`/`[Week]`/`[Day]`表示 |
 
 すべて`vim.api.nvim_set_hl(0, name, { ..., default = true })`でリンク登録し、**ハードコードした色は使わない**(snacks.nvimの`Snacks{Level}{Icon,Border,Title}`等と同じ作法)。カラースキームが`Almanac*`をリンクし直せば即座に反映される。
 
 ### 3.7 LuaCATS型注釈
 
 `snacks.win`同様、`---@class`/`---@field`/`---@overload`で公開APIを型注釈する。`almanac.Calendar`(インスタンス)、`almanac.Config`、`almanac.Event`、`almanac.EventProvider`、`almanac.Range`、`almanac.Day`を公開型として整備し、利用側プラグイン(outlook.nvim等)からも`---@type almanac.Event`等を参照できるようにする。
+
+### 3.8 月/週/日ビューのレンダリング仕様
+
+3ビューとも同じ`Event`データモデル・同じ`EventProvider`契約(3.2節)を共有する、単なる「レンダラの差し替え」として実装する(`lua/almanac/render/{month,week,day}.lua`のように分離し、共通インターフェース`render(events, range, opts) -> {lines: string[], highlights: ...}`に揃える)。
+
+- **共通ヘッダ**: 1行目に`[Month]`/`[Week]`/`[Day]`のビュー表示、2行目に`« <期間> »`のナビゲーション行(monthなら`August 2026`、weekなら`Aug 3 – Aug 9`、dayなら`Fri, Aug 7 2026`)。書式は`AlmanacHeader`ハイライト。
+- **monthビュー**: 伝統的な週×曜日グリッド(`calendar.nvim`踏襲)。1日1セル、予定は件数によらずドット(`AlmanacHasEvent`)のみ。カーソル行の下に選択日の予定を件名+開始時刻で簡潔に列挙(全件ではなく数件、詳細はweek/dayビューか呼び出し元の責務)。
+- **weekビュー**: 月〜日(`week_start`依存)を縦に7行、各曜日の下にその日の予定を時刻+件名で列挙するアジェンダ形式。予定が無い日は曜日行のみ。
+- **dayビュー**: 選択日の時間軸(例: 1時間刻みの罫線)を縦に描画し、予定をその時間帯に挿入する形で表示。`location`/`busy`等の付加情報も表示(`format_day`とは別に、将来`format_event`フックを検討)。
+- ビュー切り替え(`set_view`/`cycle_view`)時は、現在のカーソル位置の日付を保持したまま新ビューの`range`を計算し直し、必要なら`EventProvider`を再度呼ぶ(`range`が変わるため。3.2節)。
 
 ## 4. レンダリング方式: nvim-tree/neo-tree風のサイドウィンドウ
 
@@ -193,6 +214,5 @@ outlook.nvim側に`lua/outlook/calendar.lua`を追加し、
 
 ## 7. 段階的ロードマップ
 
-- **v1**: 月グリッド表示、静的/非同期`EventProvider`、キーマップ・ハイライトのカスタマイズ、`snacks.win`踏襲のLuaCATS型注釈、サイドバー配置切り替え(left/right/top/bottom/float)
-- **v2**: アジェンダ(縦一覧)レンダラを同じ`Event`データモデルの上に追加
-- **v3**: 週表示・年表示
+- **v1**: 月/週/日の3ビュー表示・切り替え、静的/非同期`EventProvider`、キーマップ・ハイライトのカスタマイズ、`snacks.win`踏襲のLuaCATS型注釈、サイドバー配置切り替え(left/right/top/bottom/float)、edgy.nvim連携
+- **v2**: 年表示、`format_event`フックによるイベント表示のさらなるカスタマイズ
