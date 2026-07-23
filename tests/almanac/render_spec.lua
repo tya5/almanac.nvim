@@ -101,9 +101,7 @@ describe("almanac.render.week", function()
     for _, abbr in ipairs({ "Mon", "Tue", "Wed", "Thu", "Sat", "Sun" }) do
       assert.is_not_nil(find_line(lines, abbr), ("missing weekday label: %s"):format(abbr))
     end
-    -- Friday is today-agnostic here, but should show as "Fri  7" (not
-    -- bracketed unless it happens to be the real today in the test env).
-    local fri_idx = find_line(lines, "Fri  7") or find_line(lines, "%[Fri  7%]")
+    local fri_idx = find_line(lines, "Fri  7")
     assert.is_not_nil(fri_idx)
     assert.truthy(lines[fri_idx + 1]:find("10:00"))
     assert.truthy(lines[fri_idx + 1]:find("Team sync"))
@@ -113,7 +111,7 @@ describe("almanac.render.week", function()
     local event = { id = "e1", title = "Team sync", start = ymd(2026, 8, 7, 10, 0) }
     local lines, highlights = week_render.render(ymd(2026, 8, 7), { event }, { week_start = "monday" })
 
-    local fri_idx = find_line(lines, "Fri  7") or find_line(lines, "%[Fri  7%]")
+    local fri_idx = find_line(lines, "Fri  7")
     local fri_hl
     for _, h in ipairs(highlights) do
       if h.line == fri_idx - 1 then
@@ -128,7 +126,7 @@ describe("almanac.render.week", function()
     local event = { id = "e1", title = "Team sync", start = ymd(2026, 8, 7, 10, 0) }
     local lines, _, line_map = week_render.render(ymd(2026, 8, 7), { event }, { week_start = "monday" })
 
-    local fri_idx = find_line(lines, "Fri  7") or find_line(lines, "%[Fri  7%]")
+    local fri_idx = find_line(lines, "Fri  7")
     assert.equals("day", line_map[fri_idx].type)
     assert.equals("event", line_map[fri_idx + 1].type)
     assert.equals("e1", line_map[fri_idx + 1].event.id)

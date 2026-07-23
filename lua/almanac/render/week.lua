@@ -24,14 +24,14 @@ function M.render(date, events, opts)
     -- Abbreviated (3-letter) and a fixed-width day number so every
     -- day's label lines up at the same width ("Mon  3", "Wed 22") —
     -- full names ("Monday"/"Wednesday") vary enough in length to look
-    -- ragged stacked vertically.
+    -- ragged stacked vertically. "Today" is conveyed purely by the
+    -- AlmanacToday highlight below, not by wrapping the text in
+    -- brackets — bracketing would itself re-introduce the same
+    -- ragged-width problem for exactly one row.
     local weekday_abbr = dateutil.WEEKDAY_ABBR[dateutil.iso_weekday(day)]
     local _, _, d = dateutil.ymd(day)
     local is_today = dateutil.is_same_day(day, today)
     local label = ("%s %2d"):format(weekday_abbr, d)
-    if is_today then
-      label = ("[%s]"):format(label)
-    end
     lines[#lines + 1] = label
     local line_idx = #lines - 1
     line_map[#lines] = { type = "day", epoch = day }
