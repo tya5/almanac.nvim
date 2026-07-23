@@ -159,6 +159,41 @@ describe("almanac.Calendar", function()
     assert.same({ 2026, 8, 15 }, { dateutil.ymd(cal:selected_day()) })
   end)
 
+  it("move_right() past a dotted day lands the real cursor correctly (byte vs display column)", function()
+    -- The "•" event marker is a 3-byte UTF-8 character but a single
+    -- display column; segment col_start/col_end are byte offsets
+    -- (nvim_win_set_cursor is byte-indexed). A day cell *before* the
+    -- one we're moving onto having a dot must not shift where later
+    -- cells in the same row are found. selected_day() alone can't
+    -- catch this: segments are built in correct day order regardless
+    -- of column bugs, so the *epoch* landed on on move is right even
+    -- when the real cursor byte column is wrong — check the buffer
+    -- byte at the cursor directly.
+    cal = Almanac({
+      date = ymd(2026, 8, 15), -- Saturday, day cell right after Fri 14 (which gets a dot below)
+      view = "month",
+      events = { { id = "e1", title = "Standup", start = ymd(2026, 8, 14, 9, 0) } },
+    })
+    cal:show()
+
+    local function cursor_text_at_col()
+      local row, col = unpack(vim.api.nvim_win_get_cursor(cal.win))
+      local line = vim.api.nvim_buf_get_lines(cal.buf, row - 1, row, false)[1]
+      return line:sub(col + 1, col + 2)
+    end
+
+    cal:goto_date(ymd(2026, 8, 14))
+    assert.equals("14", cursor_text_at_col())
+
+    cal:move_right() -- from the dotted Fri 14 cell onto Sat 15
+    assert.same({ 2026, 8, 15 }, { dateutil.ymd(cal:selected_day()) })
+    assert.equals("15", cursor_text_at_col())
+
+    cal:move_right() -- Sat 15 onto Sun 16
+    assert.same({ 2026, 8, 16 }, { dateutil.ymd(cal:selected_day()) })
+    assert.equals("16", cursor_text_at_col())
+  end)
+
   it("j/k stop on event lines (focused_event()) and next_event()/prev_event() jump directly between them", function()
     local e1 = { id = "e1", title = "Standup", start = ymd(2026, 8, 15, 9, 0) }
     local e2 = { id = "e2", title = "Review", start = ymd(2026, 8, 15, 14, 0) }

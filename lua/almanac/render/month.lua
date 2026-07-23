@@ -45,8 +45,14 @@ function M.render(date, events, opts)
     local line_idx = #lines - 1
     local segments = {}
 
+    -- Columns are byte offsets (nvim_win_set_cursor is byte-indexed),
+    -- but "•" is a 3-byte UTF-8 character while a blank marker is a
+    -- single byte — cell_width (a fixed *display*-column count) can't
+    -- be used for byte math here, or every cell after a dot drifts by
+    -- 2 bytes per preceding dot. Use each cell_text's actual #bytes.
     local col = 0
-    for _, day in ipairs(week) do
+    for i, day in ipairs(week) do
+      local cell_len = #cell_texts[i]
       local hl
       if dateutil.is_same_day(day.epoch, today) then
         hl = "AlmanacToday"
@@ -58,14 +64,14 @@ function M.render(date, events, opts)
         hl = "AlmanacWeekend"
       end
       if hl then
-        highlights[#highlights + 1] = { line = line_idx, col_start = col, col_end = col + cell_width, hl_group = hl }
+        highlights[#highlights + 1] = { line = line_idx, col_start = col, col_end = col + cell_len, hl_group = hl }
       end
       if by_day[dateutil.day_key(day.epoch)] then
         highlights[#highlights + 1] =
-          { line = line_idx, col_start = col + 2, col_end = col + cell_width, hl_group = "AlmanacHasEvent" }
+          { line = line_idx, col_start = col + 2, col_end = col + cell_len, hl_group = "AlmanacHasEvent" }
       end
-      segments[#segments + 1] = { col_start = col, col_end = col + cell_width, epoch = day.epoch }
-      col = col + cell_width + 1
+      segments[#segments + 1] = { col_start = col, col_end = col + cell_len, epoch = day.epoch }
+      col = col + cell_len + 1
     end
     line_map[#lines] = { type = "day_segments", segments = segments }
   end
